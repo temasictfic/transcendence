@@ -5,16 +5,38 @@ const socket = new WebSocket('ws://' + window.location.host + '/ws/pong/');  // 
 const canvas = document.getElementById('pongCanvas');
 const context = canvas.getContext('2d');
 
+var my = {
+    username: '', game_id: '', tournament_id: '', group_name: '',
+}
+
 socket.onopen = function (e) {
     console.log('WebSocket connection established');
 }
 
 socket.onclose = function (e) {
+    if (my.game_id) {
+        socket.sendJSON({
+            action: 'leave.match',
+            game_id: my.game_id,
+            player: my.username,
+        });
+    }
+    else if (my.tournament_id) {
+        socket.sendJSON({
+            action: 'leave.tournament',
+            tournament_id: my.tournament_id,
+            player: my.username,
+        });
+    }
     console.error('WebSocket connection closed');
 }
 
 socket.onerror = function (e) {
-    console.error('WebSocket error');
+    console.error('Error: ' + e.data);
+    if (!inviteInput.value) {
+        invitationMessage.textContent = e.data;
+        invitationModal.style.display = 'block';
+    }
 }
 
 socket.onmessage = function (e) {
@@ -22,20 +44,88 @@ socket.onmessage = function (e) {
     console.log(data);
     switch (data.type) {
         case 'user.online':
+            // Add username to onlineUsers table
+            onlineUsersTable.innerHTML = '';
+            for (let user of data.users) {
+                console.log('', user);
+                onlineUsersTable.innerHTML += `<tr><th>${user}</th></tr>`;
+            }
+            my.username = data.username;
             console.log('Player connected:', data.username);
             break;
         case 'user.offline':
+            // Remove username from onlineUsers table
+            //onlineUsersTable.innerHTML = '';
+            // Get onlineUser table remove the line which username in it
+            onlineUsersTable.innerHTML = onlineUsersTable.innerHTML.replace(`<tr><th>${data.username}</th></tr>`, '');
+
+/*             for (let user of data.users) {
+                onlineUsersTable.innerHTML += `<tr><th>${user}</th></tr>`;
+            } */
             console.log('Player disconnected:', data.username);
             break;
         
         case 'game.invite':
-            console.log(`Invited Game Id: ${data.game_id} => ${data.player1} vs ${data.player2}`);
+            // Display the modal for accepting or declining the invitation
+            my.group_name = data.group_name;
+            if (data.invited === my.username) {
+                invitationMessage.textContent = `You received a game invitation from ${data.inviter}. Do you want to accept?`;
+                invitationModal.style.display = 'block';
+            }
+            else
+            {
+                invitationMessage.textContent = `You send a game invitation to ${data.invited}`;
+            }
+
+            acceptButton.onclick = function () {
+                accept(data.group_name, data.inviter, data.invited);
+                invitationModal.style.display = 'none';
+            };
+
+            declineButton.onclick = function () {
+                decline(data.group_name, data.inviter, data.invited);
+                invitationModal.style.display = 'none';
+            };
+
+            console.log(`Invited Group Name: ${data.group_name} => ${data.inviter} vs ${data.invited}`);
+            break;
+        case 'game.accept':
+            if (data.accepter === my.username) {
+                invitationMessage.textContent = `You accepted the game invitation from ${data.accepted}`;
+                invitationMessage.style.display = 'block';
+            }
+            else if (data.accepted === my.username) {
+                invitationMessage.textContent = `Your invitation is accepted by ${data.accepter}`;
+                invitationMessage.style.display = 'block';
+            }
+            my.game_id = data.game_id;
+            // Show the game screen and start button
+
+            console.log(`Accepted Game Id: ${data.game_id} => ${data.accepted} vs ${data.accepter}`);
+            break;
+        case 'game.decline':
+            if (data.decliner === my.username) {
+                invitationMessage.textContent = `You declined the game invitation from ${data.declined}`;
+                invitationMessage.style.display = 'block';
+            }
+            else if (data.declined === my.username) {
+                invitationMessage.textContent = `Your invitation is declined by ${data.decliner}`;
+                invitationMessage.style.display = 'block';
+            }
+            console.log(`Declined Game => ${data.declined} vs ${data.decliner}`);
             break;
         case 'game.start':
+            
             console.log(`Started Game Id: ${data.game_id} => ${data.player1} vs ${data.player2}`);
             break;
-        case 'game.move':
-            console.log(`Moving Game Id: ${data.game_id} for ${data.player}: ${data.x} ${data.y}`);
+        case 'game.leave':
+            console.log(`Left Game Id: ${data.game_id} as ${data.player}`);
+            break;
+        case 'game.paddle.move':
+            console.log(`Moving Paddle Id: ${data.game_id} for ${data.player}: ${data.x} ${data.y}`);
+            break;
+        case 'game.ball.move':
+            console.log(`Moving Ball Id: ${data.game_id} for ball: ${data.x} ${data.y}`);
             break;
         // What about draw?
         case 'game.end':
@@ -74,42 +164,99 @@ socket.sendJSON = function (data) {
     socket.send(JSON.stringify(data));
 }
 
+const voteCount = document.getElementById('vote_count');
+voteCount.value = 0; // default value 0
+const startButton = document.getElementById('startButton');
+const onlineUsersTable = document.getElementById('OnlineUsers');
+const invitationModal = document.getElementById('gameInvitationModal');
+const invitationMessage = document.getElementById('invitationMessage');
+const acceptButton = document.getElementById('acceptButton');
+const declineButton = document.getElementById('declineButton');
+invitationModal.style.display = 'none';
+invitationMessage.style.display = 'none';
+
+// Add an event listener for the "Invite" button
+const inviteButton = document.getElementById('inviteButton');
+const inviteInput = document.getElementById('inviteInput');
+inviteButton.onclick = function () {
+    invitationMessage.style.display = 'block';
+    invite();
+}
 
 function invite() {
     // Get necessary data and call socket.sendJSON
+    username = inviteInput.value;
     // maybe put in action.js
     socket.sendJSON({
         action: 'invite',
-        opponent: 'opponent_username', // When invite clicked take username somehow
+        invited: username,
     });
 }
 
-function accept() {
+function accept(group_name, inviter, invited) {
     // Get necessary data and call socket.sendJSON
     socket.sendJSON({
         action: 'accept',
-        game_id: 'game_id', // When accept clicked take game_id somehow
+        group_name: group_name,
+        accepted: inviter,
+        accepter: invited,
+    });
+}
+
+function decline(group_name, inviter, invited) {
+    // Get necessary data and call socket.sendJSON
+    socket.sendJSON({
+        action: 'decline',
+        group_name: group_name,
+        declined: inviter,
+        decliner : invited,
+    });
+}
+
+function startGame() {
+    var vote_count = voteCount.value;
+    vote_count += 1;
+    socket.sendJSON({
+        action: 'game.start',
+        game_id: 'game_id',
+        group_name: my.g,
+        player1: 'player1_username',
+        player2: 'player2_username',
+        vote_count: vote_count,
     });
 }
 
 // send this in setInterval(update, 16) this ll be game state
-function move() {
+function movePaddle() {
     // Get necessary data and call socket.sendJSON
     socket.sendJSON({
-        action: 'move',
+        action: 'paddle.move',
         game_id: 'game_id',
-        x: 1, // if this for paddle only y required and for ball both
-        y: -1,
+        y: 1, // if this for paddle only y required and for ball both
         player: 'username', // player1 or player2
     });
 }
+
+// send this in setInterval(update, 16) this ll be game state
+function moveBall() {
+    // Get necessary data and call socket.sendJSON
+    socket.sendJSON({
+        action: 'ball.move',
+        game_id: 'game_id',
+        x: 1, // if this for paddle only y required and for ball both
+        y: -1,
+    });
+}
+
+
 
 function endGame() {
     // Get necessary data and call socket.sendJSON
     socket.sendJSON({
         action: 'end',
         game_id: 'game_id',
-        winner: 'username', // player1 or player2
+        player1_score: 1, // send scores when game ended
+        player2_score: 2,
     });
 }
 
@@ -147,7 +294,7 @@ function leave() {
     });
 }
 
-function start() {
+function startTournament() {
     // Get necessary data and call socket.sendJSON
     socket.sendJSON({
         action: 'start',

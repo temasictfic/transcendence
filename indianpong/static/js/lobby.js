@@ -5,54 +5,11 @@ const socket = new WebSocket('ws://' + window.location.host + '/ws/pong/');  // 
 const canvas = document.getElementById('pongCanvas');
 const context = canvas.getContext('2d');
 
-// Paddle objects
-var paddleWidth = 10;
-var paddleHeight = 75;
-var paddleY = (canvas.height - paddleHeight) / 2;
-var paddle1 = {x: 0, y: paddleY, width: paddleWidth, height: paddleHeight};
-var paddle2 = {x: canvas.width - paddleWidth, y: paddleY, width: paddleWidth, height: paddleHeight};
-
-// Ball object
-var ball = {x: canvas.width / 2, y: canvas.height / 2, radius: 10};
-
-// maybe merge with my object
-var player1 = {username: '', score: 0};
-var player2 = {username: '', score: 0};
-
-var my = {
-    username: '', opponent_username: '', game_id: '', vote: -1, tournament_id: '', 
-}
-
-// Draw everything
-function render() {
-    context.clearRect(0, 0, canvas.width, canvas.height);
-
-    context.fillStyle = "#0095DD";
-    context.fillRect(paddle1.x, paddle1.y, paddle1.width, paddle1.height);
-    context.fillRect(paddle2.x, paddle2.y, paddle2.width, paddle2.height);
-
-    context.beginPath();
-    context.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2, false);
-    context.fill();
-    context.closePath();
-
-    context.font = "16px Arial";
-    context.fillText(player1.username + ": " + player1.score, 10, 20);
-    context.fillText(player2.username + ": " + player2.score, canvas.width - 85, 20);
-}
-
-
-const startModal = document.getElementById('startModal');
+/* const startModal = document.getElementById('startModal');
 startModal.style.display = 'none';
-const myCheckMark = document.getElementById('myCheckMark');
-myCheckMark.style.display = 'none';
-const opCheckMark = document.getElementById('opCheckMark');
-opCheckMark.style.display = 'none';
-/* const voteCount = document.getElementById('voteCount');
-voteCount.value = -1; */
+const voteCount = document.getElementById('voteCount');
+voteCount.value = -1;
 const startButton = document.getElementById('startButton');
-const leaveButton = document.getElementById('leaveButton');
-const restartButton = document.getElementById('restartButton');
 const onlineUsersTable = document.getElementById('OnlineUsers');
 const invitationModal = document.getElementById('gameInvitationModal');
 const invitationMessage = document.getElementById('invitationMessage');
@@ -61,11 +18,11 @@ const declineButton = document.getElementById('declineButton');
 const inviteButton = document.getElementById('inviteButton');
 const inviteInput = document.getElementById('inviteInput');
 invitationModal.style.display = 'none';
-invitationMessage.style.display = 'block';
-leaveButton.style.display = 'none';
-restartButton.style.display = 'none';
+invitationMessage.style.display = 'none'; */
 
-
+var my = {
+    username: '', opponent_username: '', game_id: '', tournament_id: '', group_name: '',
+}
 
 socket.onopen = function (e) {
     // Show some greeting message
@@ -73,21 +30,17 @@ socket.onopen = function (e) {
 }
 
 socket.onclose = function (e) {
-    clearInterval(BallRequest);
-    stopGame();
-    console.error('WebSocket connection closed');
     if (my.game_id) {
         // Show some connection lost message with scores etc.
     }
     else if (my.tournament_id && my.game_id) {
         // Show some connection lost message with scores and tournament rank etc.
     }
+    console.error('WebSocket connection closed');
 }
 
 socket.onerror = function (e) {
     console.error('Error: ' + e.data);
-    clearInterval(BallRequest);
-    stopGame();
     if (!inviteInput.value) {
         invitationMessage.textContent = e.data;
         invitationModal.style.display = 'block';
@@ -99,15 +52,15 @@ socket.onmessage = function (e) {
     console.log(data);
     switch (data.type) {
         case 'user.online':
-            // Add username to onlineUsers table
-            onlineUsersTable.innerHTML = '';
-            //showOnlineUsers(data.users);
-            for (let user of data.users) {
-                console.log('', user);
-                onlineUsersTable.innerHTML += `<tr><th>${user}</th></tr>`;
-            }
             if (my.username === '')
                 my.username = data.username;
+            // Add username to onlineUsers table
+            //onlineUsersTable.innerHTML = '';
+            showOnlineUsers(data.users);
+/*             for (let user of data.users) {
+                console.log('', user);
+                onlineUsersTable.innerHTML += `<tr><th>${user}</th></tr>`;
+            } */
             console.log('Player connected:', data.username);
             console.log(my.username);
             break;
@@ -115,7 +68,12 @@ socket.onmessage = function (e) {
             // Remove username from onlineUsers table
             //onlineUsersTable.innerHTML = '';
             // Get onlineUser table remove the line which username in it
-            onlineUsersTable.innerHTML = onlineUsersTable.innerHTML.replace(`<tr><th>${data.username}</th></tr>`, '');
+            document.querySelectorAll('#userTableBody td').forEach(cell => {
+                if (cell.textContent === data.username)
+                    cell.closest('tr').remove();
+            }
+            );
+            //onlineUsersTable.innerHTML = onlineUsersTable.innerHTML.replace(`<tr><th>${data.username}</th></tr>`, '');
 
 /*             for (let user of data.users) {
                 onlineUsersTable.innerHTML += `<tr><th>${user}</th></tr>`;
@@ -125,17 +83,49 @@ socket.onmessage = function (e) {
         
         case 'game.invite':
             // Display the modal for accepting or declining the invitation
+            if (my.group_name === '')
+                my.group_name = data.group_name;
             console.log(my.username);
             if (data.invited === my.username) {
-                invitationMessage.textContent = `You received a game invitation from ${data.inviter}`;
-                invitationModal.style.display = 'block';
+                document.getElementById('message').innerText = `You received a game invitation from ${data.inviter}.`;
+                const acceptBtn = document.createElement('button');
+                acceptBtn.classList.add('btn', 'btn-success', 'accept-btn');
+                acceptBtn.innerText = 'Accept';
+        
+                // Create Decline button
+                const declineBtn = document.createElement('button');
+                declineBtn.classList.add('btn', 'btn-danger', 'decline-btn');
+                declineBtn.innerText = 'Decline';
+    
+                const inviteButton = document.querySelector('.invite-btn[data-username="' + data.inviter + '"]');
+                inviteButton.style.display = 'none';
+                // Insert Accept and Decline buttons after the hidden Invite button
+                inviteButton.parentNode.insertBefore(acceptBtn, inviteButton.nextSibling);
+                inviteButton.parentNode.insertBefore(declineBtn, inviteButton.nextSibling);
+        
+/*              invitationMessage.textContent = `You received a game invitation from ${data.inviter}.`; //Do you want to accept?`
+                invitationModal.style.display = 'block'; */
             }
-            if (data.inviter === my.username)
+/*             else
             {
-                invitationMessage.textContent = `You send a game invitation to ${data.invited}`;
-            }
+                document.getElementById('message').innerText = `You sent a game invitation to ${data.invited}`;
+                //invitationMessage.textContent = `You send a game invitation to ${data.invited}`;
+            } */
+            document.addEventListener('click', function (event) {
+                if (event.target.classList.contains('accept-btn') || event.target.classList.contains('decline-btn')) {
+                    // Simulate backend logic for accepting or declining the invitation
+                    if (event.target.classList.contains('accept-btn')) {
+                        accept(data.group_name, data.inviter, data.invited);
+                    }
+                    else if (event.target.classList.contains('decline-btn')) {
+                        decline(data.group_name, data.inviter, data.invited);
+                    }
+                    // Hide accept and decline buttons show start button
 
-            acceptButton.onclick = function () {
+                }
+            });
+
+/*             acceptButton.onclick = function () {
                 accept(data.group_name, data.inviter, data.invited);
                 invitationModal.style.display = 'none';
             };
@@ -143,143 +133,93 @@ socket.onmessage = function (e) {
             declineButton.onclick = function () {
                 decline(data.group_name, data.inviter, data.invited);
                 invitationModal.style.display = 'none';
-            };
+            }; */
 
             console.log(`Invited Group Name: ${data.group_name} => ${data.inviter} vs ${data.invited}`);
             break;
-        case 'game.accept':
-            player1.username = data.accepted;
-            player2.username = data.accepter;
+            case 'game.accept':
+            // Create Start button and replace with Accept button and Decline button
+            const startBtn = document.createElement('button');
+            startBtn.classList.add('btn', 'btn-success', 'start-btn');
+            startBtn.innerText = 'Start';
             if (data.accepter === my.username) {
-                invitationMessage.textContent = `You accepted the game invitation from ${data.accepted}`;
-                invitationMessage.style.display = 'block';
+                /*                 invitationMessage.textContent = `You accepted the game invitation from ${data.accepted}`;
+                invitationMessage.style.display = 'block'; */
+                document.getElementById('message').innerText = `You accepted the game invitation from ${data.accepted}`;
                 my.opponent_username = data.accepted; // if gerekir mi?
-                
-
+                const acceptButton = document.querySelector('.accept-btn');
+                acceptButton.style.display = 'none';
+                const declineButton = document.querySelector('.decline-btn');
+                declineButton.style.display = 'none';
+                // Insert Start button after the hidden Decline button
+                declineButton.parentNode.insertBefore(startBtn, declineButton.nextSibling);
             }
             else if (data.accepted === my.username) {
-                invitationMessage.textContent = `Your invitation is accepted by ${data.accepter}`;
-                invitationMessage.style.display = 'block';
+/*                 invitationMessage.textContent = `Your invitation is accepted by ${data.accepter}`;
+                invitationMessage.style.display = 'block'; */
+                document.getElementById('message').innerText = `Your invitation is accepted by ${data.accepter}`;
                 my.opponent_username = data.accepter; // if gerekir mi?
+                const inviteButton = querySelector('.invite-btn[data-username="' + data.accepter + '"]')
+                //insert Start button after the hidden Invite button
+                inviteButton.parentNode.insertBefore(startBtn, inviteButton.nextSibling);
             }
             if (my.game_id === '')
                 my.game_id = data.game_id;
+
+
             // Show the game screen and start button
-            startModal.style.display = 'block';
+/*             startModal.style.display = 'block';
             startButton.onclick = function () {
-                // maybe put timeout here for protection against bashing button
                 startRequest(my.username, my.opponent_username);
-            };
-            render();
+            }; */
+
             console.log(`Accepted Game Id: ${data.game_id} => ${data.accepted} vs ${data.accepter}`);
             break;
         case 'game.decline':
             if (data.decliner === my.username) {
-                invitationMessage.textContent = `You declined the game invitation from ${data.declined}`;
-                invitationMessage.style.display = 'block';
+/*                 invitationMessage.textContent = `You declined the game invitation from ${data.declined}`;
+                invitationMessage.style.display = 'block'; */
+                document.getElementById('message').innerText = `You declined the game invitation from ${data.declined}`;
             }
             else if (data.declined === my.username) {
-                invitationMessage.textContent = `Your invitation is declined by ${data.decliner}`;
-                invitationMessage.style.display = 'block';
+/*                 invitationMessage.textContent = `Your invitation is declined by ${data.decliner}`;
+                invitationMessage.style.display = 'block'; */
+                document.getElementById('message').innerText = `Your invitation is declined by ${data.decliner}`;
             }
             console.log(`Declined Game => ${data.declined} vs ${data.decliner}`);
             break;
         case 'game.start':
             // Start the game
-            if (data.vote == 2) {
-                myCheckMark.style.display = 'block';
-                opCheckMark.style.display = 'block';
-                invitationMessage.textContent = `Game starting in 3 sec between ${data.player1} and ${data.player2}`;
-                setTimeout(function () {
-                  invitationMessage.style.display = "none";
-                  myCheckMark.style.display = "none";
-                  opCheckMark.style.display = "none";
-                }, 3000);
-                startModal.style.display = 'none';
-
-                leaveButton.style.display = 'block';
-                // make invitationMessage disappear after 3 seconds
-
-                leaveButton.onclick = function () {
-                    leaveGame();
-                    leaveButton.style.display = 'none';
-                }
-
-                // Control paddle1 with w, s keys
-                document.addEventListener("keydown", function(event) {
-                    if (event.key === "w" || event.key === "ArrowUp") {
-                        PaddleRequest("up");
-                    } else if (event.key === "s" || event.key === "ArrowDown") {
-                        PaddleRequest("down");
-                    }
-                });
-                // Ask ball coordinates every 16 milliseconds
-                startGame();
-                setInterval(BallRequest, 16);
-
-                console.log(`Started Game Id: ${data.game_id} => ${data.player1} vs ${data.player2}`);
-            }
-            else if (data.vote == 1) {
-                if (myCheckMark.style.display == 'none')
-                    opCheckMark.style.display = 'block';
-                else if (opCheckMark.style.display == 'none')
-                    myCheckMark.style.display = 'block';
-                console.log(`Waiting for Game Id: ${data.game_id} => ${data.player1} vs ${data.player2}`);
-            }
-            else if (data.vote == 0) {
-                opCheckMark.style.display = 'none';
-                myCheckMark.style.display = 'none';
-            }
+            invitationMessage.textContent = `Game started between ${data.player1} and ${data.player2}`;
+            console.log(`Started Game Id: ${data.game_id} => ${data.player1} vs ${data.player2}`);
             break;
         case 'game.leave':
-            clearInterval(BallRequest);
-            stopGame();
-            left_score = data.left_score;
-            opponent_score = data.opponent_score;
+            my.score = data.score;
+            my.opponent_score = data.opponent_score;
             winner = data.winner;
             // Show some left game message with scores etc.
-            invitationMessage.textContent = `${data.left} left the game. Winner is ${data.winner}`;
-            invitationMessage.style.display = 'block';
-            // maybe put restart
-            restartButton.style.display = 'block';
-            restartButton.onclick = function () {
-                startRequest(my.username, my.opponent_username);
-            };
-
-            console.log(`Left Game Id: ${data.game_id}`);
+        
+            console.log(`Left Game Id: ${data.game_id} => ${my.opponent_username} left`);
             break;
         // What about draw?
         case 'game.end':
-            clearInterval(BallRequest);
-            stopGame();
-            player1_score = data.player1_score;
-            player2_score = data.player2_score;
+            my.score = data.score;
+            my.opponent_score = data.opponent_score;
             winner = data.winner;
-            // Show some game ended message with scores etc.
-            invitationMessage.textContent = `Game is ended. Winner is ${data.winner}`;
-            invitationMessage.style.display = 'block';
-            // maybe put restart
-            restartButton.style.display = 'block';
-            restartButton.onclick = function () {
-                startRequest(my.username, my.opponent_username);
-            };
             console.log(`Ended Game Id: ${data.game_id} => ${data.winner} won`);
             break;
-        case 'game.ball':
+        case 'game.ball.move':
             //get ball position and update it
-            ballMove(data.x, data.y)
-            scoreUpdate(data.player1_score, data.player2_score)
+            ballDraw(data.x, data.y)
+            
+
             console.log(`Moving Ball Id: ${data.game_id} for ball: ${data.x} ${data.y}`);
             break;
-        case 'game.paddle':
+        case 'game.paddle.move':
             //get paddle position and update it
-            paddleMove(data.player, data.y)
+            paddleDraw(data.player, data.y)
             console.log(`Moving Paddle Id: ${data.game_id} for ${data.player}: ${data.y}`);
             break;
-
-        
-        
-            // Tournament cases
         case 'tournament.start':
             for (const match in data.matches) {
                 console.log(`Started Tournament Id: ${data.tournament_id} => Match Id: ${match.match_id} => ${match.player1} vs ${match.player2}`);
@@ -313,45 +253,101 @@ socket.sendJSON = function (data) {
     socket.send(JSON.stringify(data));
 }
 
-var requestId;
+function showOnlineUsers(users) {
+    const tbody = document.getElementById('userTableBody');
+    tbody.innerHTML = '';
+    users.forEach(user => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${user}</td>
+        <td>
+          <span class="status-icon bg-success" title="Online"></span>
+          Online
+        </td>`;
+      if (user !== my.username){
+          row.innerHTML += `
+            <td>
+              <button class="btn btn-primary invite-btn" data-username="${user}">Invite</button>
+            </td>
+          `;
+      }
+      tbody.appendChild(row);
+    });
 
-// The main game loop
-var startGame = function () {
-    render();
-    // Request to do this again ASAP
-    requestId = requestAnimationFrame(startGame);
-};
+}
+// Add your JavaScript logic here
 
-// When you want to stop the game loop
-var stopGame = function() {
-    cancelAnimationFrame(requestId);
-};
+document.getElementById('userTableBody').addEventListener('click', function (event) {
+    const clickedButton = event.target;
 
-// Cross-browser support for requestAnimationFrame
-var w = window;
-requestAnimationFrame =
-  w.requestAnimationFrame ||
-  w.webkitRequestAnimationFrame ||
-  w.msRequestAnimationFrame ||
-  w.mozRequestAnimationFrame;
+    if (clickedButton.classList.contains('invite-btn')) {
+        const username = clickedButton.getAttribute('data-username');
 
-function paddleMove(player, y) {
-    if (player === player1.username) {
-        paddle1.y = y;
-    } else if (player === player2.username) {
-        paddle2.y = y;
+        // Call your invite function with the username
+        invite(username);
+
+        // Hide invite button
+        clickedButton.style.display = 'none';
+
+        // Show appropriate message
+        document.getElementById('message').innerText = `You sent a game invitation to ${username}`;
     }
-}
+});
 
-function ballMove(x, y) {
-    ball.x = x;
-    ball.y = y;
-}
 
-function scoreUpdate(player1_score, player2_score) {
-    player1.score = player1_score;
-    player2.score = player2_score;
-}
+/*   button.addEventListener('click', function (event) {
+    const username = this.getAttribute('data-username');
+    // Call your invite function with the username
+    invite(username);
+
+    // Show appropriate message
+    document.getElementById('message').innerText = `You sent a game invitation to ${username}`;
+    // Hide invite button
+    this.style.display = 'none';
+    // Show accept and decline buttons
+    const actionCol = event.currentTarget.closest('tr').querySelector('.action-col');
+    actionCol.innerHTML = `
+        <button class="btn btn-success start-btn">Accept</button>
+        <button class="btn btn-danger decline-btn">Decline</button>
+    `;
+  }); */
+
+
+// Handle accept and decline buttons (simulated)
+/* document.addEventListener('click', function (event) {
+  if (event.target.classList.contains('btn-accept') || event.target.classList.contains('btn-decline')) {
+    // Simulate backend logic for accepting or declining the invitation
+
+    // Update message
+      document.getElementById('message').innerText = event.target.classList.contains('btn-accept') ?
+      'Your invitation has been accepted' :
+      'Your invitation has been declined';
+
+    // Hide accept and decline buttons show start button
+    event.target.closest('tr').querySelector('.action-col').innerHTML = '<button class="btn btn-success start-btn">Start</button>';
+  }
+});
+ */
+// Handle start button click and toggle checkmark
+document.addEventListener('click', function (event) {
+  if (event.target.classList.contains('start-btn')) {
+    const checkMark = '<span class="text-success">&#10003;</span>';
+    const buttonText = event.target.innerHTML;
+
+    if (buttonText.includes(checkMark)) {
+      // Call startRequest function
+      startRequest(my.username, my.opponent_username);
+      // Update message
+      document.getElementById('message').innerText = 'Start request sent';
+
+      // Remove checkmark
+      event.target.innerHTML = 'Start';
+    } else {
+      // Add checkmark
+      event.target.innerHTML = `${checkMark} Start`;
+    }
+  }
+});
 
 /* function showOnlineUsers(users) {
     for (let user of users) {
@@ -392,18 +388,18 @@ var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
  */
 
 // Add an event listener for the "Invite" button
-inviteButton.onclick = function () {
+/* inviteButton.onclick = function () {
     invitationMessage.style.display = 'block';
     invite();
-}
+} */
 
-function invite() {
+function invite(username) {
     // Get necessary data and call socket.sendJSON
     //username = inviteInput.value;
     // maybe put in action.js
     socket.sendJSON({
         action: 'invite',
-        invited: inviteInput.value,
+        invited: username,
     });
 }
 
@@ -426,19 +422,16 @@ function decline(group_name, inviter, invited) {
         decliner : invited,
     });
 }
+var voteCount = -1;
 // Vote count ll be 1 at start if 
 function startRequest(player1, player2) {
-    my.vote *= -1
-    myCheckMark.style.display = 'block';
-    if (my.vote == -1){
-        myCheckMark.style.display = 'none';
-    }
+    voteCount *= -1;
     socket.sendJSON({
         action: 'start.request',
         game_id: my.game_id,
         player1: player1,
         player2: player2,
-        vote: my.vote,
+        vote: voteCount,
     });
 }
 
@@ -453,35 +446,38 @@ function leaveGame() {
 }
 
 // When game ended send this only once 
-/* function gameEnded() {
+function gameEnded() {
     // Get necessary data and call socket.sendJSON
     socket.sendJSON({
         action: 'end',
-        game_id: my.game_id,
-    });
-} */
-
-// send this in keydown event
-function PaddleRequest(direction) {
-    // Get necessary data and call socket.sendJSON
-    socket.sendJSON({
-        action: 'paddle',
-        game_id: my.game_id,
-        direction: direction
+        game_id: 'game_id',
     });
 }
 
 // send this in setInterval(update, 16) this ll be game state
-function BallRequest() {
+function movePaddle() {
     // Get necessary data and call socket.sendJSON
     socket.sendJSON({
-        action: 'ball',
-        game_id: my.game_id,
+        action: 'paddle.move',
+        game_id: 'game_id',
+        y: 1, // if this for paddle only y required and for ball both
+        player: 'username', // player1 or player2
+    });
+}
+
+// send this in setInterval(update, 16) this ll be game state
+function moveBall() {
+    // Get necessary data and call socket.sendJSON
+    socket.sendJSON({
+        action: 'ball.move',
+        game_id: 'game_id',
+        x: 1, // if this for paddle only y required and for ball both
+        y: -1,
     });
 }
 
 
-// Tournament functions---------------------------------------------
+
 
 function create() {
     // Get necessary data and call socket.sendJSON

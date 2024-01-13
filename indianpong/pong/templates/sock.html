@@ -1,6 +1,6 @@
 {% load static %}
 
-<html>
+<html lang='en'>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,10 +17,19 @@
 </head>
 
 <body>
-    <!-- Create username list table and get username from connected user and add to table -->
-    <table id="OnlineUsers">
     <div>
         <p id="invitationMessage"></p>
+    </div>
+    <div>
+        <button id="leaveButton">Leave</button>
+    </div>
+    <div>
+        <button id="restartButton">Restart</button>
+    </div>
+{% comment %}     <button onclick="invite()">Invite</button> {% endcomment %}
+    <div>
+        <input type="text" id="inviteInput" placeholder="Enter username">
+        <button id="inviteButton">Invite Opponent</button>
     </div>
     <div id="gameInvitationModal" class="modal">
         <div class="modal-content">
@@ -28,9 +37,19 @@
             <button id="declineButton">Decline</button>
         </div>
     </div>
-{% comment %}     <button onclick="invite()">Invite</button> {% endcomment %}
-    <input type="text" id="inviteInput" placeholder="Enter username">
-    <button id="inviteButton">Invite Opponent</button>
+    <!-- Check Mark Emoji-->
+    <p id="myCheckMark">✅</p>
+    <p id="opCheckMark">✅</p>
+    <div id="startModal" class="modal">
+        <div class="modal-content">
+            <button id="startButton">Vote</button>
+        </div>
+    </div>
+    <div>
+        <!-- Create username list table and get username from connected user and add to table -->
+        <table id="OnlineUsers">
+        </table>
+    </div>
 {% comment %}     <button onclick="move()">Move</button>
     <button onclick="endGame()">End Game</button>
     <button onclick="join()">Join Tournament</button>
